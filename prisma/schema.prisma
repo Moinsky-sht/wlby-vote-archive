@@ -1,0 +1,278 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../server/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model AppConfig {
+  key   String @id
+  value Json
+
+  @@map("app_config")
+}
+
+model Theme {
+  id          String @id
+  prefix      String
+  name        String
+  description String
+  sortOrder   Int    @map("sort_order")
+
+  works       Work[]
+  voteRecords VoteRecord[]
+
+  @@map("themes")
+}
+
+model Work {
+  id           String       @id
+  code         String       @unique
+  title        String
+  author       String
+  team         String?
+  themeId      String       @map("theme_id")
+  themeName    String       @map("theme_name")
+  type         String
+  cover        String
+  description  String
+  status       String
+  votes        Int          @default(0)
+  displayOrder Int          @map("display_order")
+  createdAt    DateTime     @map("created_at")
+  updatedAt    DateTime     @map("updated_at")
+  meta         Json?        @map("meta_json")
+  theme        Theme        @relation(fields: [themeId], references: [id])
+  media        WorkMedia[]
+  legacyVotes  Vote[]
+  voteRecords  VoteRecord[]
+  reports      Report[]
+
+  @@index([status, displayOrder], map: "idx_works_status_order")
+  @@index([themeId], map: "idx_works_theme")
+  @@map("works")
+}
+
+model WorkMedia {
+  id        String  @id
+  workId    String  @map("work_id")
+  type      String
+  url       String
+  poster    String?
+  title     String?
+  sortOrder Int     @map("sort_order")
+  work      Work    @relation(fields: [workId], references: [id], onDelete: Cascade)
+
+  @@map("work_media")
+}
+
+model Vote {
+  id        String   @id
+  phone     String
+  workId    String   @map("work_id")
+  themeId   String   @map("theme_id")
+  createdAt DateTime @map("created_at")
+  day       String
+  work      Work     @relation(fields: [workId], references: [id], onDelete: Cascade)
+
+  @@index([phone, day], map: "idx_votes_phone_day")
+  @@index([workId], map: "idx_votes_work")
+  @@map("votes")
+}
+
+model User {
+  id                         String             @id
+  phone                      String?            @unique
+  email                      String?            @unique
+  registrationIpHash         String?            @map("registration_ip_hash")
+  passwordHash               String?            @map("password_hash")
+  status                     String             @default("active")
+  mustChangePassword         Boolean            @default(false) @map("must_change_password")
+  temporaryPasswordExpiresAt DateTime?          @map("temporary_password_expires_at")
+  passwordUpdatedAt          DateTime?          @map("password_updated_at")
+  token                      String?            @unique
+  tokenExpireTime            DateTime?          @map("token_expire_time")
+  createdTime                DateTime           @map("created_time")
+  lastLoginTime              DateTime           @map("last_login_time")
+  voteRecords                VoteRecord[]
+  sessions                   UserLoginSession[]
+  loginAudits                UserLoginAudit[]
+  auditLogs                  AdminAuditLog[]
+
+  @@index([registrationIpHash, createdTime], map: "idx_users_registration_ip_time")
+
+  @@map("users")
+}
+
+model UserLoginAudit {
+  id        String   @id
+  userId    String   @map("user_id")
+  ip        String
+  visitorId String?  @map("visitor_id")
+  createdAt DateTime @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt], map: "idx_user_login_audits_user_created")
+  @@index([ip, createdAt], map: "idx_user_login_audits_ip_created")
+  @@map("user_login_audits")
+}
+
+model UserLoginSession {
+  id         String   @id
+  userId     String   @map("user_id")
+  tokenHash  String   @unique @map("token_hash")
+  createdAt  DateTime @map("created_at")
+  expiresAt  DateTime @map("expires_at")
+  lastSeenAt DateTime @map("last_seen_at")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_user_sessions_user")
+  @@index([expiresAt], map: "idx_user_sessions_expires")
+  @@map("user_sessions")
+}
+
+model SmsVerification {
+  id        String    @id
+  phone     String
+  purpose   String
+  codeHash  String    @map("code_hash")
+  day       String
+  sendIp    String    @map("send_ip")
+  attempts  Int       @default(0)
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @map("created_at")
+
+  @@index([phone, day], map: "idx_sms_phone_day")
+  @@index([sendIp, day], map: "idx_sms_ip_day")
+  @@index([phone, purpose, createdAt], map: "idx_sms_phone_purpose_created")
+  @@map("sms_verifications")
+}
+
+model VoteRecord {
+  id          String   @id
+  userId      String   @map("user_id")
+  workId      String   @map("work_id")
+  themeId     String   @map("theme_id")
+  voteDate    String   @map("vote_date")
+  createdTime DateTime @map("created_time")
+  ipHash      String?  @map("ip_hash")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  work        Work     @relation(fields: [workId], references: [id], onDelete: Cascade)
+  theme       Theme    @relation(fields: [themeId], references: [id])
+
+  @@index([userId, themeId, voteDate], map: "idx_vote_records_user_theme_date")
+  @@index([userId, voteDate], map: "idx_vote_records_user_date")
+  @@index([workId], map: "idx_vote_records_work")
+  @@index([ipHash, createdTime], map: "idx_vote_records_ip_time")
+  @@index([userId, createdTime], map: "idx_vote_records_user_time")
+  @@index([voteDate], map: "idx_vote_records_date")
+  @@map("vote_records")
+}
+
+model AuthVerification {
+  id         String   @id
+  channel    String
+  identifier String
+  purpose    String
+  ipHash     String   @map("ip_hash")
+  codeHash   String   @map("code_hash")
+  attempts   Int      @default(0)
+  delivered  Boolean  @default(false)
+  expiresAt  DateTime @map("expires_at")
+  usedAt     DateTime? @map("used_at")
+  createdAt  DateTime @map("created_at")
+
+  @@index([channel, identifier, createdAt], map: "idx_auth_verification_identity_time")
+  @@index([ipHash, createdAt], map: "idx_auth_verification_ip_time")
+  @@map("auth_verifications")
+}
+
+model Visit {
+  id        String   @id
+  visitorId String   @map("visitor_id")
+  phone     String?
+  path      String
+  createdAt DateTime @map("created_at")
+  day       String
+
+  @@index([day], map: "idx_visits_day")
+  @@index([visitorId, phone, path, createdAt], map: "idx_visits_identity")
+  @@map("visits")
+}
+
+model Report {
+  id          String   @id
+  workId      String   @map("work_id")
+  reason      String
+  description String?
+  contact     String?
+  phone       String?
+  visitorId   String   @map("visitor_id")
+  status      String
+  createdAt   DateTime @map("created_at")
+  updatedAt   DateTime @map("updated_at")
+  work        Work     @relation(fields: [workId], references: [id], onDelete: Cascade)
+
+  @@index([workId], map: "idx_reports_work")
+  @@index([status], map: "idx_reports_status")
+  @@map("reports")
+}
+
+model AdminUser {
+  id           String          @id
+  username     String          @unique
+  passwordHash String          @map("password_hash")
+  createdAt    DateTime        @map("created_at")
+  updatedAt    DateTime        @map("updated_at")
+  sessions     AdminSession[]
+  auditLogs    AdminAuditLog[]
+
+  @@map("admin_users")
+}
+
+model AdminAuditLog {
+  id           String    @id
+  adminUserId  String    @map("admin_user_id")
+  targetUserId String?   @map("target_user_id")
+  action       String
+  ip           String
+  details      Json?
+  createdAt    DateTime  @map("created_at")
+  adminUser    AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  targetUser   User?     @relation(fields: [targetUserId], references: [id], onDelete: SetNull)
+
+  @@index([adminUserId, createdAt], map: "idx_admin_audit_admin_created")
+  @@index([targetUserId, createdAt], map: "idx_admin_audit_target_created")
+  @@map("admin_audit_logs")
+}
+
+model AdminSession {
+  id         String    @id
+  userId     String    @map("user_id")
+  tokenHash  String    @unique @map("token_hash")
+  createdAt  DateTime  @map("created_at")
+  expiresAt  DateTime  @map("expires_at")
+  lastSeenAt DateTime  @map("last_seen_at")
+  user       AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_admin_sessions_user")
+  @@index([expiresAt], map: "idx_admin_sessions_expires")
+  @@map("admin_sessions")
+}
+
+model LoginThrottle {
+  key             String    @id
+  scope           String
+  kind            String
+  failures        Int       @default(0)
+  windowStartedAt DateTime  @map("window_started_at")
+  lockedUntil     DateTime? @map("locked_until")
+  updatedAt       DateTime  @map("updated_at")
+
+  @@index([scope, updatedAt], map: "idx_login_throttles_scope_updated")
+  @@index([lockedUntil], map: "idx_login_throttles_locked_until")
+  @@map("login_throttles")
+}

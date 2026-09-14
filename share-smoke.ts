@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {copyShareLink,shareCancelled} from './src/sharing';
+import {workShareHtml} from './server/sharePage';
+const url='https://vote.wlbycuc.cn/work/real_B48';
+let copied='';
+assert.equal(await copyShareLink(url,{writeText:async text=>{copied=text;}},()=>{throw Error('unexpected fallback');}),true);assert.equal(copied,url);
+assert.equal(await copyShareLink(url,{writeText:async()=>{throw Error('denied');}},text=>text===url),true);
+assert.equal(await copyShareLink(url,{writeText:async()=>{throw Error('denied');}},()=>false),false);
+assert.equal(shareCancelled({name:'AbortError'}),true);assert.equal(shareCancelled({name:'NotAllowedError'}),false);
+const html=workShareHtml('<html><head><title>old</title></head><body></body></html>',{id:'real_B48',code:'B48',title:'作品"<script>',description:'<img onerror="bad">',cover:'/assets/cover.webp'},'https://vote.wlbycuc.cn');
+assert.ok(html.includes('property="og:url" content="'+url+'"'));assert.ok(!html.includes('<script>'));assert.ok(html.includes('&lt;script&gt;'));assert.ok(html.includes('https://vote.wlbycuc.cn/assets/cover.webp'));
+assert.ok(fs.readFileSync('src/components/WorkCard.vue','utf8').includes('v-if="work.votes > 0"'));
+assert.ok(fs.readFileSync('src/pages/DetailPage.vue','utf8').includes('if(target.votes > 0)'));
+const vote=fs.readFileSync('src/pages/VotePage.vue','utf8');assert.ok(!vote.includes('vote-contest-title'));assert.ok(vote.includes('object-fit: contain'));
+for(const file of ['src/components/LinkShareDialog.vue','src/components/PosterShareDialog.vue'])assert.ok(!fs.readFileSync(file,'utf8').includes('朋友圈'));
+console.log('Copy success/denial/fallback, cancellation, safe share metadata, zero-vote display and banner checks passed');
